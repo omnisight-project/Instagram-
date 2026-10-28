@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>فرم آمارگیری</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; margin: 40px; line-height: 1.6; }
+        .form-container { max-width: 40px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        input, select, button { width: 100%; padding: 10px; margin-top: 10px; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+<div class="form-container">
+    <h2>فرم ثبت اطلاعات آمارگیری</h2>
+    <form id="surveyForm">
+        <label for="name">نام و نام خانوادگی:</label>
+        <input type="text" id="name" required>
+
+        <label for="age">سن:</label>
+        <input type="number" id="age" required>
+
+        <label for="feedback">توضیحات / پاسخ:</label>
+        <input type="text" id="feedback" required>
+
+        <button type="submit">ارسال اطلاعات</button>
+    </form>
+</div>
+
+<script>
+const BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'; // توکن ربات خود را اینجا قرار دهید
+const CHAT_ID = 'YOUR_CHAT_ID_HERE';   // شناسه عددی چت یا کانال خود را قرار دهید
+
+document.getElementById('surveyForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const name = document.getElementById('name').value;
+    const age = document.getElementById('age').value;
+    const feedback = document.getElementById('feedback').value;
+
+    const message = `📊 **اطلاعات جدید آمارگیری:**\n\n👤 نام: ${name}\n🔢 سن: ${age}\n💬 توضیحات: ${feedback}`;
+
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.ok) {
+            alert('اطلاعات با موفقیت ارسال شد.');
+            document.getElementById('surveyForm').reset();
+        } else {
+            alert('خطا در ارسال اطلاعات.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('خطای ارتباطی رخ داد.');
+    });
+});
+</script>
+
+</body>
+</html>
